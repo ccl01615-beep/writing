@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
+<title>Trendline Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --surface-2:#F5F7F9; --ink:#17202B; --muted:#5B6878;
+  --line:#D8DEE5; --grid:#E7EBEF; --accent:#2F5BD3; --accent-ink:#FFFFFF;
+  --up:#15835A; --down:#C23B32; --watch:#A86B12; --cone:#C98A1B;
+  --sma20:#8A5CD6; --sma50:#2A93AD; --sma200:#D2663A; --band:#7C8BA1;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --bg:#0E131A; --surface:#151C25; --surface-2:#1B2430; --ink:#E4E9EF; --muted:#94A1B2;
+    --line:#2A3542; --grid:#202A36; --accent:#7B9BFF; --accent-ink:#0E131A;
+    --up:#3FBF86; --down:#F06B60; --watch:#E3A63B; --cone:#E0A43A;
+    --sma20:#B08CF0; --sma50:#5EC4DB; --sma200:#F08A5C; --band:#8C9AAE;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.45;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* title bar (drag handle) */
+.bar{-webkit-app-region:drag;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;background:var(--surface);border-bottom:1px solid var(--line);flex:none}
+.bar .brand{font-family:var(--cond);font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;flex:1;min-width:0;white-space:nowrap}
+.bar .brand small{font-family:var(--sans);font-weight:400;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar button,.bar select,.bar input{-webkit-app-region:no-drag}
+.ib{border:0;background:none;color:var(--muted);width:26px;height:24px;border-radius:5px;display:grid;place-items:center;padding:0}
+.ib:hover{background:var(--surface-2);color:var(--ink)}
+.ib[aria-pressed="true"]{color:var(--accent)}
+.ib.close:hover{background:var(--down);color:#fff}
+.op{width:62px;accent-color:var(--accent)}
+@media (max-width:480px){.bar .brand small{display:none}}
+
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 12px 14px;display:grid;gap:10px;align-content:start}
+
+/* ticker entry + watchlist */
+.entry{display:flex;gap:6px}
+.entry input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 9px;text-transform:uppercase;font-family:var(--mono);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 11px;font-weight:500;font-size:12.5px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:5px;font-family:var(--cond);font-weight:600;font-size:12.5px}
+.chip button{border:0;background:none;padding:2px 4px 2px 8px}
+.chip .x{padding:2px 6px 2px 2px;color:var(--muted);font-weight:400}
+.chip[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.chip .mv{font-family:var(--mono);font-weight:400;font-size:11px;padding-right:4px}
+
+/* quote */
+.quote{display:grid;gap:2px}
+.quote .l1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tk{font-family:var(--cond);font-weight:700;font-size:24px;line-height:1.05}
+.px{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.chg{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.meta{color:var(--muted);font-size:11.5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.live{display:inline-flex;align-items:center;gap:4px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block}
+.live.on i{background:var(--up);box-shadow:0 0 0 3px color-mix(in srgb,var(--up) 25%,transparent)}
+.up{color:var(--up)} .down{color:var(--down)}
+.msg{border:1px solid var(--line);border-left:3px solid var(--down);background:var(--surface);border-radius:6px;padding:8px 10px;font-size:12.5px}
+.msg.info{border-left-color:var(--accent);color:var(--muted)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.chartcard{padding:8px 8px 6px;display:grid;gap:6px}
+.controls{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:2px 8px;font-size:11.5px;font-weight:500;color:var(--muted);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.ov{display:flex;flex-wrap:wrap;gap:4px}
+.ov label{display:inline-flex;align-items:center;gap:4px;font-size:11px;border:1px solid var(--line);border-radius:12px;padding:1px 7px 1px 5px;cursor:pointer;user-select:none}
+.ov input{margin:0;width:12px;height:12px;accent-color:var(--accent)}
+.ov .sw{width:9px;height:3px;border-radius:2px;display:inline-block}
+.chartbox{position:relative;height:clamp(210px,34vh,360px)}
+.chartbox canvas{width:100%;height:100%;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:11px;line-height:1.4;box-shadow:0 4px 14px rgba(0,0,0,.18);white-space:nowrap;z-index:2}
+
+.panel{padding:10px 12px;display:grid;gap:8px}
+.panel h3{margin:0;font-family:var(--cond);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.panel h3 small{text-transform:none;letter-spacing:0;font-family:var(--sans);font-weight:400;font-size:11px}
+.verdicts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.vd{border:1px solid var(--line);border-radius:6px;padding:6px 7px;display:grid;gap:1px;background:var(--surface-2)}
+.vd .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.vd .v{font-family:var(--cond);font-weight:700;font-size:15px;line-height:1.15}
+.vd .s{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tone-bull{color:var(--up)} .tone-bear{color:var(--down)} .tone-watch{color:var(--watch)} .tone-neutral{color:var(--muted)}
+.lean{margin:0;font-size:12.5px}
+.sc{border-left:3px solid var(--line);padding:1px 0 1px 9px;display:grid;gap:1px}
+.sc.bull{border-color:var(--up)} .sc.bear{border-color:var(--down)} .sc.base{border-color:var(--cone)}
+.sc .t{font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.sc .t .fav{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:600;color:var(--accent)}
+.sc p{margin:0;font-size:12px;color:var(--muted)}
+.sc p b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:11.5px}
+.sig{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.sig li{display:grid;grid-template-columns:auto 1fr;gap:1px 7px;align-items:start}
+.dot{width:7px;height:7px;border-radius:50%;margin-top:6px;background:currentColor}
+.sig .t{font-weight:600;font-size:12.5px;color:var(--ink)}
+.sig .d{grid-column:2;font-size:11.5px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+td,th{padding:4px 3px;border-bottom:1px solid var(--grid);text-align:left}
+th{font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.now td{font-weight:600;background:var(--surface-2)}
+.foot{font-size:11px;color:var(--muted);margin:0}
+details.panel summary{cursor:pointer;list-style:none}
+details.panel summary::-webkit-details-marker{display:none}
+details.panel summary h3::after{content:"＋";font-weight:400}
+details.panel[open] summary h3::after{content:"－"}
+.disclaim{font-size:10.5px;color:var(--muted);margin:0}
+
+body.compact .full{display:none!important}
+body.compact .scroll{gap:8px;padding-top:8px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="brand">
+    <svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><path d="M2 17 L8 11 L12 14 L20 5 M14 5 H20 V11" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Trendline Desk <small id="hint"></small>
+  </div>
+  <input class="op" id="opacity" type="range" min="0.35" max="1" step="0.05" value="1" title="Window opacity" aria-label="Window opacity">
+  <button class="ib" id="pinBtn" title="Keep on top of other windows" aria-label="Keep on top" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 1h6l-1 5 3 3H3l3-3zM8 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+  <button class="ib" id="compactBtn" title="Compact view" aria-label="Compact view" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5h12M2 11h12" stroke="currentColor" stroke-width="1.6"/></svg></button>
+  <button class="ib" id="minBtn" title="Minimize" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.6"/></svg></button>
+  <button class="ib close" id="closeBtn" title="Close" aria-label="Close"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6"/></svg></button>
+</div>
+
+<div class="scroll">
+  <form class="entry" id="entry">
+    <input id="sym" type="text" placeholder="Ticker, e.g. AAPL" maxlength="14" autocomplete="off" spellcheck="false" aria-label="Ticker symbol">
+    <button class="btn primary" type="submit">Load</button>
+  </form>
+  <div class="chips full" id="chips" aria-label="Watchlist"></div>
+
+  <div id="msg"></div>
+  <div class="quote" id="quote"></div>
+
+  <section class="card chartcard full" id="chartcard" hidden>
+    <div class="controls">
+      <div class="seg" id="rangeSeg"></div>
+      <span class="lbl">Project</span>
+      <div class="seg" id="horizonSeg"></div>
+      <div class="seg" id="lowerSeg"></div>
+    </div>
+    <div class="ov" id="overlays"></div>
+    <div class="chartbox" id="chartbox">
+      <canvas id="chart" role="img" aria-label="Price chart with indicators and projection"></canvas>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+  </section>
+
+  <section class="card panel" id="readCard" hidden>
+    <h3>Current read <small id="asof"></small></h3>
+    <div class="verdicts" id="verdicts"></div>
+    <p class="lean" id="lean"></p>
+  </section>
+
+  <section class="card panel full" id="nextCard" hidden>
+    <h3>What could come next <small id="horizonLbl"></small></h3>
+    <div style="display:grid;gap:7px" id="scenarios"></div>
+  </section>
+
+  <section class="card panel full" id="sigCard" hidden>
+    <h3>Patterns detected</h3>
+    <ul class="sig" id="signals"></ul>
+  </section>
+
+  <details class="card panel full" id="lvCard" hidden open>
+    <summary><h3>Key levels</h3></summary>
+    <table id="levels"></table>
+  </details>
+
+  <details class="card panel full" id="brCard" hidden>
+    <summary><h3>What this stock did before</h3></summary>
+    <table id="baserates"></table>
+    <p class="foot" id="brFoot"></p>
+  </details>
+
+  <p class="disclaim full">Prices from Yahoo Finance's public feed, which can lag by a few seconds to minutes. Patterns describe tendencies, not certainties. News and earnings can override them. Not financial advice.</p>
+</div>
+
+<script src="analysis.js"></script>
+<script>
+(() => {
+"use strict";
+const T = window.TrendAnalysis, { f$, pct, esc, fDate, MONTHS } = T, last = a => a[a.length - 1];
+const $ = s => document.querySelector(s);
+// window.trendline is provided by preload.js inside the app. The fallback keeps the page usable for tests.
+const api = window.trendline || {
+  history: async () => ({ ok: false, error: "Open this through the Trendline Desk app to load live prices." }),
+  getPrefs: async () => { try { return JSON.parse(localStorage.getItem("tl.prefs") || "{}"); } catch { return {}; } },
+  setPrefs: async p => { try { localStorage.setItem("tl.prefs", JSON.stringify(p)); } catch {} },
+  windowState: async () => ({ onTop: true, opacity: 1, compact: false, shortcut: "Ctrl+Shift+Y" }),
+  setOnTop: async () => {}, setOpacity: async () => {}, setCompact: async () => {}, minimize: async () => {}, close: async () => {},
+};
+
+const REFRESH_OPEN_MS = 60 * 1000, REFRESH_CLOSED_MS = 10 * 60 * 1000;
+let prefs = { watch: ["SPY"], sel: "SPY", range: "6M", H: 20, lower: "rsi", ov: { sma20: false, sma50: true, sma200: true, bb: false, chan: true, lv: true, proj: true } };
+let data = null, A = null, loading = false, timer = null, hover = null, layout = null, reqId = 0;
+const moves = {};  // day change per watchlist symbol, filled as they load
+
+const save = () => api.setPrefs(prefs);
+
+/* ---------- window controls ---------- */
+async function initWindow() {
+  const w = await api.windowState();
+  $("#pinBtn").setAttribute("aria-pressed", String(w.onTop));
+  $("#opacity").value = w.opacity;
+  setCompactUI(w.compact);
+  $("#hint").textContent = w.shortcut.replace("CommandOrControl", navigator.platform.startsWith("Mac") ? "⌘" : "Ctrl") + " to show/hide";
+  $("#pinBtn").onclick = () => { const on = $("#pinBtn").getAttribute("aria-pressed") !== "true"; $("#pinBtn").setAttribute("aria-pressed", String(on)); api.setOnTop(on); };
+  $("#opacity").oninput = e => api.setOpacity(+e.target.value);
+  $("#compactBtn").onclick = () => { const on = !document.body.classList.contains("compact"); setCompactUI(on); api.setCompact(on); };
+  $("#minBtn").onclick = () => api.minimize();
+  $("#closeBtn").onclick = () => api.close();
+}
+function setCompactUI(on) { document.body.classList.toggle("compact", on); $("#compactBtn").setAttribute("aria-pressed", String(on)); if (!on) requestAnimationFrame(draw); }
+
+/* ---------- loading ---------- */
+async function load(sym, { quiet = false } = {}) {
+  sym = String(sym || "").trim().toUpperCase();
+  if (!sym) return;
+  const id = ++reqId;
+  loading = true;
+  if (!quiet) showMsg("info", `Loading ${sym}…`);
+  const res = await api.history(sym);
+  if (id !== reqId) return;  // a newer request superseded this one
+  loading = false;
+  if (!res.ok) {
+    if (quiet && data && data.meta.symbol === sym) { setLiveDot(false, "Update failed, retrying"); return; }
+    showMsg("err", res.error);
+    return;
+  }
+  showMsg();
+  const sym2 = res.meta.symbol || sym;
+  if (!prefs.watch.includes(sym2)) prefs.watch = [sym2, ...prefs.watch].slice(0, 12);
+  prefs.sel = sym2; save();
+  data = res;
+  A = T.analyze(res.rows, prefs.H);
+  const r = res.rows; moves[sym2] = r[r.length - 1].c / r[r.length - 2].c - 1;
+  render();
+  schedule();
+}
+function schedule() {
+  clearTimeout(timer);
+  const open = data && data.meta.session && data.meta.session !== "Market closed";
+  timer = setTimeout(() => { if (data) load(data.meta.symbol, { quiet: true }); }, open ? REFRESH_OPEN_MS : REFRESH_CLOSED_MS);
+}
+window.addEventListener("focus", () => { if (data && Date.now() - data.fetchedAt > 30000) load(data.meta.symbol, { quiet: true }); });
+function showMsg(kind, text) { const m = $("#msg"); m.innerHTML = text ? `<div class="msg ${kind === "info" ? "info" : ""}">${esc(text)}</div>` : ""; }
+function setLiveDot(on, label) { const el = $("#liveDot"); if (el) { el.classList.toggle("on", on); el.lastChild.textContent = " " + label; } }
+
+$("#entry").addEventListener("submit", e => { e.preventDefault(); const v = $("#sym").value; $("#sym").value = ""; load(v); });
+
+/* ---------- render ---------- */
+function renderChips() {
+  const el = $("#chips"); el.innerHTML = "";
+  for (const s of prefs.watch) {
+    const c = document.createElement("span"); c.className = "chip"; c.setAttribute("aria-current", String(data && s === data.meta.symbol));
+    const b = document.createElement("button"); const mv = moves[s];
+    b.innerHTML = esc(s) + (mv != null ? ` <span class="mv ${mv >= 0 ? "up" : "down"}">${pct(mv)}</span>` : "");
+    b.onclick = () => load(s);
+    const x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove " + s);
+    x.onclick = () => { prefs.watch = prefs.watch.filter(w => w !== s); save(); renderChips(); };
+    c.append(b, x); el.append(c);
+  }
+}
+function seg(el, opts, val, on) { el.innerHTML = ""; for (const [v, l] of opts) { const b = document.createElement("button"); b.textContent = l; b.setAttribute("aria-pressed", String(v === val)); b.onclick = () => on(v); el.append(b); } }
+const OVS = [["sma20", "20d", "--sma20"], ["sma50", "50d", "--sma50"], ["sma200", "200d", "--sma200"], ["bb", "Bands", "--band"], ["chan", "Channel", "--accent"], ["lv", "Levels", "--muted"], ["proj", "Cone", "--cone"]];
+function renderControls() {
+  seg($("#rangeSeg"), [["3M", "3M"], ["6M", "6M"], ["1Y", "1Y"], ["2Y", "2Y"]], prefs.range, v => { prefs.range = v; save(); renderControls(); draw(); });
+  seg($("#horizonSeg"), [[10, "2w"], [20, "1m"], [60, "3m"]], prefs.H, v => { prefs.H = v; save(); A = T.analyze(data.rows, v); render(); });
+  const lo = [["rsi", "RSI"], ["macd", "MACD"]]; if (A.hasVol) lo.push(["vol", "Vol"]); if (prefs.lower === "vol" && !A.hasVol) prefs.lower = "rsi";
+  seg($("#lowerSeg"), lo, prefs.lower, v => { prefs.lower = v; save(); renderControls(); draw(); });
+  const ov = $("#overlays"); ov.innerHTML = "";
+  for (const [k, l, tok] of OVS) {
+    const id = "ov-" + k, lab = document.createElement("label"); lab.htmlFor = id;
+    lab.innerHTML = `<input type="checkbox" id="${id}" ${prefs.ov[k] ? "checked" : ""}><span class="sw" style="background:var(${tok})"></span>${l}`;
+    lab.querySelector("input").onchange = e => { prefs.ov[k] = e.target.checked; save(); draw(); };
+    ov.append(lab);
+  }
+}
+function render() {
+  data.fetchedAt = Date.now();
+  const { rows, meta } = data, n = rows.length, p = A.px, ch = p / rows[n - 2].c - 1;
+  const t = new Date(meta.time), timeTxt = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const open = meta.session && meta.session !== "Market closed";
+  $("#quote").innerHTML = `<div class="l1"><span class="tk">${esc(meta.symbol)}</span><span class="px">${f$(p)}</span><span class="chg ${ch >= 0 ? "up" : "down"}">${pct(ch, 2)}</span></div>
+    <div class="meta"><span class="live ${open ? "on" : ""}" id="liveDot"><i></i> ${esc(meta.session || "Live")}</span><span>· last trade ${timeTxt}</span>${meta.name ? `<span>· ${esc(meta.name)}</span>` : ""}${meta.currency && meta.currency !== "USD" ? `<span>· ${esc(meta.currency)}</span>` : ""}</div>`;
+  for (const id of ["chartcard", "readCard", "nextCard", "sigCard", "lvCard", "brCard"]) $("#" + id).hidden = false;
+  $("#asof").textContent = "updated " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  $("#verdicts").innerHTML = [["Trend", A.trend], ["Momentum", A.momentum], ["Volatility", A.volatility]].map(([k, v]) => `<div class="vd"><span class="k">${k}</span><span class="v tone-${v.tone}">${v.v}</span><span class="s">${esc(v.s)}</span></div>`).join("");
+  const sc = T.scenarios(A), bulls = A.signals.filter(x => x.w > 0).length, bears = A.signals.filter(x => x.w < 0).length;
+  $("#lean").innerHTML = sc.lean === "bull" ? `Leans <b class="tone-bull">bullish</b>: ${bulls} supportive signals vs ${bears} negative.` : sc.lean === "bear" ? `Leans <b class="tone-bear">bearish</b>: ${bears} negative signals vs ${bulls} supportive.` : `<b>Balanced</b>: ${bulls} supportive, ${bears} negative. Watch the levels for direction.`;
+  $("#horizonLbl").textContent = `next ${A.H} sessions`;
+  $("#scenarios").innerHTML = sc.items.map(it => `<div class="sc ${it.k}"><div class="t">${it.title}${it.k === sc.lean ? '<span class="fav">Data leans here</span>' : ""}</div><p>${it.text}</p></div>`).join("");
+  const order = { bull: 0, bear: 1, watch: 2, neutral: 3 };
+  $("#signals").innerHTML = [...A.signals].sort((a, b) => order[a.tone] - order[b.tone]).map(x => `<li class="tone-${x.tone}"><span class="dot"></span><span class="t">${esc(x.title)}</span><span class="d">${esc(x.detail)}</span></li>`).join("");
+  const lv = [...A.above.map(l => ({ ...l, k: "Resistance" })).reverse(), { k: "Last", p: A.px, now: true }, ...A.below.map(l => ({ ...l, k: "Support" }))];
+  $("#levels").innerHTML = lv.map(l => `<tr class="${l.now ? "now" : ""}"><td>${l.k}</td><td class="n">${f$(l.p)}</td><td class="n">${l.now ? "" : pct(l.p / A.px - 1)}</td><td class="n" style="color:var(--muted)">${l.now ? "" : l.touches + "×"}</td></tr>`).join("") + (A.above.length ? "" : `<tr><td colspan="4" style="color:var(--muted)">No overhead resistance in the past year.</td></tr>`);
+  $("#baserates").innerHTML = `<tr><th>When…</th><th class="n">Days</th><th class="n">Median</th><th class="n">Up</th><th class="n">10/90%</th></tr>` + A.base.map(b => b.n < 15 ? `<tr><td>${esc(b.name)}</td><td class="n">${b.n}</td><td colspan="3" class="n" style="color:var(--muted)">too few</td></tr>` : `<tr><td>${esc(b.name)}</td><td class="n">${b.n}</td><td class="n ${b.med >= 0 ? "up" : "down"}">${pct(b.med)}</td><td class="n">${Math.round(b.up * 100)}%</td><td class="n">${pct(b.p10, 0)}/${pct(b.p90, 0)}</td></tr>`).join("");
+  $("#brFoot").textContent = `Past days in the last 2 years that matched today's condition, and the stock's return over the next ${A.H} sessions. Context, not odds.`;
+  renderChips(); renderControls(); draw();
+}
+
+/* ---------- chart ---------- */
+const cv = $("#chart"), box = $("#chartbox"), tip = $("#tip");
+function tok() { const cs = getComputedStyle(document.documentElement), g = k => cs.getPropertyValue(k).trim(); return { ink: g("--ink"), muted: g("--muted"), grid: g("--grid"), line: g("--line"), surface: g("--surface"), accent: g("--accent"), up: g("--up"), down: g("--down"), cone: g("--cone"), sma20: g("--sma20"), sma50: g("--sma50"), sma200: g("--sma200"), band: g("--band") }; }
+function rgba(hex, a) { const h = hex.replace("#", ""), f = h.length === 3 ? h.split("").map(x => x + x).join("") : h, n = parseInt(f, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
+function niceTicks(min, max, count) { const raw = (max - min) / count, mag = Math.pow(10, Math.floor(Math.log10(raw))), nm = raw / mag, st = (nm < 1.5 ? 1 : nm < 3 ? 2 : nm < 7 ? 5 : 10) * mag, t = []; for (let v = Math.ceil(min / st) * st; v <= max + 1e-9; v += st) t.push(+v.toFixed(8)); return t; }
+function line(ctx, arr, a, b, X, Y, col, w) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = "round"; ctx.beginPath(); let pen = false; for (let i = a; i < b; i++) { const v = arr[i]; if (!isFinite(v)) { pen = false; continue; } pen ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v)); pen = true; } ctx.stroke(); }
+let raf = 0; function draw() { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawNow); }
+function drawNow() {
+  if (!data || document.body.classList.contains("compact")) return;
+  const rows = data.rows, n = rows.length, Tk = tok(), ov = prefs.ov;
+  const dpr = window.devicePixelRatio || 1, W = box.clientWidth, Ht = box.clientHeight;
+  if (!W || !Ht) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Ht * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Ht * dpr); }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Ht);
+  const bars = { "3M": 63, "6M": 126, "1Y": 252, "2Y": 504 }[prefs.range] || 126, start = Math.max(0, n - bars), proj = ov.proj ? A.H : 0, slots = n - start + proj;
+  const padL = 2, padR = 54, padT = 6, axisH = 16, gap = 8, lowerH = Math.max(46, Math.round(Ht * .2)), priceH = Ht - padT - lowerH - gap - axisH, plotW = W - padL - padR, sw = plotW / slots;
+  const X = i => padL + (i - start + .5) * sw;
+  let lo = Infinity, hi = -Infinity; const inc = v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } };
+  for (let i = start; i < n; i++) { inc(rows[i].l); inc(rows[i].h); if (ov.bb) { inc(A.bbU[i]); inc(A.bbL[i]); } if (ov.sma50) inc(A.s50[i]); if (ov.sma200) inc(A.s200[i]); if (ov.sma20) inc(A.s20[i]); }
+  if (proj) for (const c of A.cone) { inc(c.lo95); inc(c.hi95); }
+  const pad = (hi - lo) * .05; lo -= pad; hi += pad;
+  const Y = p => padT + (hi - p) / (hi - lo) * priceH;
+  layout = { start, sw, padL, padR, n, proj, W };
+  const mono = "10.5px 'IBM Plex Mono',ui-monospace,monospace";
+  ctx.font = mono; ctx.textBaseline = "middle";
+  for (const t of niceTicks(lo, hi, 5)) { const y = Math.round(Y(t)) + .5; ctx.strokeStyle = Tk.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke(); ctx.fillStyle = Tk.muted; ctx.textAlign = "left"; ctx.fillText(f$(t).replace(".00", ""), padL + plotW + 5, y); }
+  ctx.textAlign = "center"; let lastX = -1e9; const ly = Ht - axisH / 2;
+  for (let i = start + 1; i < n; i++) { const a = rows[i - 1].d, b = rows[i].d; if (a.slice(5, 7) !== b.slice(5, 7)) { const x = X(i), m = +b.slice(5, 7); if (x - lastX < 44 || x > padL + plotW - 16) continue; ctx.strokeStyle = Tk.grid; ctx.beginPath(); ctx.moveTo(Math.round(x) + .5, padT); ctx.lineTo(Math.round(x) + .5, Ht - axisH); ctx.stroke(); ctx.fillStyle = m === 1 ? Tk.ink : Tk.muted; ctx.fillText(m === 1 ? b.slice(0, 4) : MONTHS[m - 1], x, ly); lastX = x; } }
+  if (proj) {
+    const x0 = X(n - 1), x1 = X(n - 1 + proj); ctx.fillStyle = rgba(Tk.cone, .05); ctx.fillRect(x0, padT, x1 - x0 + sw / 2, priceH);
+    const band = (k1, k2, al) => { ctx.beginPath(); A.cone.forEach((c, t) => { const x = X(n - 1 + t); t ? ctx.lineTo(x, Y(c[k2])) : ctx.moveTo(x, Y(c[k2])); }); for (let t = A.cone.length - 1; t >= 0; t--) ctx.lineTo(X(n - 1 + t), Y(A.cone[t][k1])); ctx.closePath(); ctx.fillStyle = rgba(Tk.cone, al); ctx.fill(); };
+    band("lo95", "hi95", .14); band("lo68", "hi68", .26);
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = Tk.cone; ctx.lineWidth = 1.4; ctx.beginPath(); A.cone.forEach((c, t) => { const x = X(n - 1 + t); t ? ctx.lineTo(x, Y(c.mid)) : ctx.moveTo(x, Y(c.mid)); }); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (ov.bb) { ctx.beginPath(); let f = true; for (let i = start; i < n; i++) { if (isNaN(A.bbU[i])) continue; f ? ctx.moveTo(X(i), Y(A.bbU[i])) : ctx.lineTo(X(i), Y(A.bbU[i])); f = false; } for (let i = n - 1; i >= start; i--) if (!isNaN(A.bbL[i])) ctx.lineTo(X(i), Y(A.bbL[i])); ctx.closePath(); ctx.fillStyle = rgba(Tk.band, .1); ctx.fill(); for (const arr of [A.bbU, A.bbL]) line(ctx, arr, start, n, X, Y, rgba(Tk.band, .7), 1); }
+  if (ov.chan) { const R = A.reg, a = Math.max(R.x0, start); if (a < n - 1) { for (const [off, dash, al] of [[0, [], .9], [2, [3, 3], .6], [-2, [3, 3], .6]]) { ctx.setLineDash(dash); ctx.strokeStyle = rgba(Tk.accent, al); ctx.lineWidth = 1; ctx.beginPath(); for (const i of [a, n - 1]) { const v = Math.exp(R.icpt + R.slope * (i - R.x0) + off * R.resSd); i === a ? ctx.moveTo(X(i), Y(v)) : ctx.lineTo(X(i), Y(v)); } ctx.stroke(); } ctx.setLineDash([]); } }
+  if (ov.lv) { ctx.font = "10px 'IBM Plex Mono',ui-monospace,monospace"; for (const [arr, col] of [[A.above, Tk.down], [A.below, Tk.up]]) for (const l of arr) { if (l.p < lo || l.p > hi) continue; const y = Math.round(Y(l.p)) + .5; ctx.setLineDash([2, 4]); ctx.strokeStyle = rgba(col, .85); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col; ctx.textAlign = "left"; ctx.fillText(`${f$(l.p)} ×${l.touches}`, padL + 3, y - 6); } ctx.font = mono; }
+  const ohlc = rows.slice(start).some(r => r.o !== r.c || r.h !== r.l);
+  if (sw >= 3 && ohlc) { for (let i = start; i < n; i++) { const r = rows[i], up = r.c >= r.o, col = up ? Tk.up : Tk.down, x = Math.round(X(i)) + .5, bw = Math.max(1, Math.floor(sw * .62)); ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, Y(r.h)); ctx.lineTo(x, Y(r.l)); ctx.stroke(); const y1 = Y(Math.max(r.o, r.c)), y2 = Y(Math.min(r.o, r.c)); ctx.fillStyle = up ? Tk.surface : col; ctx.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1)); ctx.strokeRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1)); } }
+  else { const g = ctx.createLinearGradient(0, padT, 0, padT + priceH); g.addColorStop(0, rgba(Tk.accent, .18)); g.addColorStop(1, rgba(Tk.accent, 0)); ctx.beginPath(); for (let i = start; i < n; i++) i === start ? ctx.moveTo(X(i), Y(rows[i].c)) : ctx.lineTo(X(i), Y(rows[i].c)); ctx.lineTo(X(n - 1), padT + priceH); ctx.lineTo(X(start), padT + priceH); ctx.closePath(); ctx.fillStyle = g; ctx.fill(); line(ctx, rows.map(r => r.c), start, n, X, Y, Tk.accent, 1.5); }
+  if (ov.sma20) line(ctx, A.s20, start, n, X, Y, Tk.sma20, 1.2);
+  if (ov.sma50) line(ctx, A.s50, start, n, X, Y, Tk.sma50, 1.4);
+  if (ov.sma200) line(ctx, A.s200, start, n, X, Y, Tk.sma200, 1.5);
+  { const y = Y(A.px); ctx.fillStyle = Tk.ink; ctx.fillRect(padL + plotW + 1, y - 8, padR - 2, 16); ctx.fillStyle = Tk.surface; ctx.textAlign = "left"; ctx.fillText(f$(A.px), padL + plotW + 5, y); ctx.beginPath(); ctx.arc(X(n - 1), Y(A.px), 2.8, 0, Math.PI * 2); ctx.fillStyle = Tk.ink; ctx.fill(); }
+  const lt = padT + priceH + gap, lh = lowerH; ctx.strokeStyle = Tk.line; ctx.lineWidth = 1; ctx.strokeRect(padL + .5, lt + .5, plotW - 1, lh - 1);
+  if (prefs.lower === "rsi") { const Yr = v => lt + (100 - v) / 100 * lh; ctx.fillStyle = rgba(Tk.band, .1); ctx.fillRect(padL, Yr(70), plotW, Yr(30) - Yr(70)); for (const v of [30, 70]) { ctx.strokeStyle = rgba(Tk.band, .6); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(padL, Math.round(Yr(v)) + .5); ctx.lineTo(padL + plotW, Math.round(Yr(v)) + .5); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = Tk.muted; ctx.textAlign = "left"; ctx.fillText(String(v), padL + plotW + 5, Yr(v)); } line(ctx, A.r14, start, n, X, Yr, Tk.accent, 1.3); }
+  else if (prefs.lower === "macd") { let m = 0; for (let i = start; i < n; i++) for (const v of [A.macd[i], A.sig[i], A.hist[i]]) if (isFinite(v)) m = Math.max(m, Math.abs(v)); m = m || 1; const Ym = v => lt + lh / 2 - v / m * (lh / 2 - 4); ctx.strokeStyle = Tk.grid; ctx.beginPath(); ctx.moveTo(padL, Math.round(Ym(0)) + .5); ctx.lineTo(padL + plotW, Math.round(Ym(0)) + .5); ctx.stroke(); const bw = Math.max(1, sw * .6); for (let i = start; i < n; i++) { const v = A.hist[i]; if (!isFinite(v)) continue; ctx.fillStyle = rgba(v >= 0 ? Tk.up : Tk.down, .55); const y0 = Ym(0), y1 = Ym(v); ctx.fillRect(X(i) - bw / 2, Math.min(y0, y1), bw, Math.abs(y1 - y0)); } line(ctx, A.macd, start, n, X, Ym, Tk.accent, 1.2); line(ctx, A.sig, start, n, X, Ym, Tk.cone, 1); ctx.fillStyle = Tk.muted; ctx.textAlign = "left"; ctx.fillText("MACD", padL + plotW + 5, lt + 8); }
+  else { let m = 0; for (let i = start; i < n; i++) m = Math.max(m, rows[i].v); m = m || 1; const bw = Math.max(1, sw * .7); for (let i = start; i < n; i++) { const r = rows[i], h = r.v / m * (lh - 6); ctx.fillStyle = rgba(r.c >= (i ? rows[i - 1].c : r.o) ? Tk.up : Tk.down, .5); ctx.fillRect(X(i) - bw / 2, lt + lh - h, bw, h); } ctx.fillStyle = Tk.muted; ctx.textAlign = "left"; ctx.fillText(m >= 1e6 ? (m / 1e6).toFixed(0) + "M" : m >= 1e3 ? (m / 1e3).toFixed(0) + "K" : String(m), padL + plotW + 5, lt + 8); }
+  if (hover != null) { const x = Math.round(X(hover)) + .5; ctx.strokeStyle = rgba(Tk.ink, .35); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, lt + lh); ctx.stroke(); ctx.setLineDash([]); const v = hover < n ? rows[hover].c : A.cone[hover - (n - 1)].mid; ctx.beginPath(); ctx.arc(x, Y(v), 3.2, 0, Math.PI * 2); ctx.fillStyle = hover < n ? Tk.accent : Tk.cone; ctx.fill(); }
+}
+cv.addEventListener("pointermove", e => {
+  if (!layout || !data) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, { start, sw, padL, padR, n, proj, W } = layout;
+  if (x < padL || x > W - padR) { hover = null; tip.hidden = true; draw(); return; }
+  const i = Math.max(start, Math.min(n - 1 + proj, start + Math.floor((x - padL) / sw))); hover = i;
+  const rows = data.rows; let html;
+  if (i < n) { const rw = rows[i], pc = i ? rw.c / rows[i - 1].c - 1 : 0; html = `<b>${fDate(rw.d)}</b><br>O ${f$(rw.o)} H ${f$(rw.h)}<br>L ${f$(rw.l)} C ${f$(rw.c)} <span class="${pc >= 0 ? "up" : "down"}">${pct(pc, 2)}</span>${isFinite(A.r14[i]) ? `<br>RSI ${A.r14[i].toFixed(0)}` : ""}`; }
+  else { const t = i - (n - 1), c = A.cone[t]; html = `<b>+${t} sessions (projected)</b><br>Trend path ${f$(c.mid)}<br>68% ${f$(c.lo68)}–${f$(c.hi68)}<br>95% ${f$(c.lo95)}–${f$(c.hi95)}`; }
+  tip.innerHTML = html; tip.hidden = false; const tw = tip.offsetWidth; let tx = x + 12; if (tx + tw > W - 2) tx = x - tw - 12; tip.style.left = Math.max(2, tx) + "px"; tip.style.top = Math.max(2, y - 56) + "px"; draw();
+});
+cv.addEventListener("pointerleave", () => { hover = null; tip.hidden = true; draw(); });
+new ResizeObserver(() => draw()).observe(box);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+if (document.fonts) document.fonts.ready.then(draw);
+
+/* ---------- boot ---------- */
+(async () => {
+  const saved = await api.getPrefs();
+  prefs = { ...prefs, ...saved, ov: { ...prefs.ov, ...(saved && saved.ov) } };
+  await initWindow();
+  renderChips();
+  $("#sym").focus();
+  if (prefs.sel) load(prefs.sel);
+  // Fill in watchlist day-change badges in the background.
+  for (const s of prefs.watch) if (s !== prefs.sel) api.history(s).then(r => { if (r.ok) { const rr = r.rows; moves[s] = rr[rr.length - 1].c / rr[rr.length - 2].c - 1; renderChips(); } });
+})();
+})();
+</script>
+</body>
+</html>
