@@ -11,7 +11,15 @@ A small always-on-top window that floats over your broker app. You type a ticker
 
 It does not connect to your brokerage or see your account. It looks up the same ticker independently.
 
-## Run it
+## Install on Windows
+
+1. Open this repository's **Releases** page on GitHub and choose **Trendline Desk for Windows**.
+2. Download `TrendlineDesk-Setup-….exe` and run it. The portable `.exe` runs without installing.
+3. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**. It appears because the app isn't code-signed.
+
+A fresh build is published automatically every time code in `trendline-desk/` changes.
+
+## Run from source (optional)
 
 1. Install [Node.js](https://nodejs.org) (the LTS version).
 2. In a terminal:

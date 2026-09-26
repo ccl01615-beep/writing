@@ -1,0 +1,51 @@
+name: Build Windows app
+
+on:
+  push:
+    paths:
+      - "trendline-desk/**"
+      - ".github/workflows/build-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: trendline-desk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: trendline-desk/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrendlineDesk-Windows
+          path: trendline-desk/dist/*.exe
+          if-no-files-found: error
+
+      # Keep one always-current download page under the repo's Releases.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-latest-build
+          target_commitish: ${{ github.sha }}
+          name: Trendline Desk for Windows
+          make_latest: true
+          files: trendline-desk/dist/*.exe
+          body: |
+            Download **TrendlineDesk-Setup** to install it (adds Start menu and desktop shortcuts), or **TrendlineDesk-Portable** to run it without installing.
+
+            Windows may show "Windows protected your PC" because the app isn't code-signed. Click **More info**, then **Run anyway**.
+
+            Built from ${{ github.sha }}.

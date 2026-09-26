@@ -6,9 +6,47 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/analysis.test.js test/feed.test.js"
+    "test": "node --test test/analysis.test.js test/feed.test.js",
+    "dist": "electron-builder --win nsis portable"
   },
   "devDependencies": {
-    "electron": "^44.4.5"
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "author": "Trendline Desk",
+  "build": {
+    "appId": "desk.trendline.app",
+    "productName": "Trendline Desk",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "feed.js",
+      "analysis.js",
+      "overlay.html",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Trendline Desk",
+      "artifactName": "TrendlineDesk-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "TrendlineDesk-Portable-${version}.${ext}"
+    },
+    "publish": null
   }
 }
