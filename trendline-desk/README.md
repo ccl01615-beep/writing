@@ -31,7 +31,11 @@ A fresh build is published automatically every time code in `trendline-desk/` ch
 
 ## Using it
 
-- **Ticker box**: type a symbol and press Enter. Non-US listings use Yahoo's suffixes, e.g. `SHOP.TO` or `VOD.L`. Indexes use `^`, e.g. `^GSPC`.
+- **Follow TradingView** (Windows, on by default): with TradingView Desktop open, the overlay switches to whatever chart you're viewing. It reads the symbol from TradingView's window title, which is the only thing it reads. It never captures your screen or logs into your account. Untick the box to go back to typing tickers.
+- **Ticker box**: type a symbol and press Enter. It understands TradingView-style names too:
+  - Stocks: `AAPL`, `NASDAQ:AAPL`, `BRK.B`, `TSX:SHOP` (becomes `SHOP.TO`), `LSE:VOD` (becomes `VOD.L`)
+  - Crypto: `BTC`, `BTCUSDT`, `BINANCE:BTCUSDT`, `ETH/USD`, `SOLUSD`. All of these load the coin's USD price (`BTC-USD`). When a coin symbol is also a stock ticker, like `SOL`, you get a one-click option to load the stock instead.
+  - Indexes: `SPX`, `NDX`, `DJI`, `VIX`, or Yahoo's own `^GSPC`
 - **Watchlist chips**: click to switch and × to remove. Each chip shows the day's change.
 - **Drag** the window by its top bar. Its size and position are remembered.
 - **Title bar buttons**: an opacity slider, a pin to keep the window on top (on by default), compact view (just the price and verdicts), minimize and close.
@@ -41,12 +45,14 @@ A fresh build is published automatically every time code in `trendline-desk/` ch
 ## Limits
 
 - Yahoo's free feed can lag real time by seconds to a few minutes, and Yahoo can change or rate-limit it without notice.
+- Crypto prices are Yahoo's composite USD price. They can differ slightly from a single exchange's price, like Binance's USDT pair.
 - All the analysis is technical, based only on price and volume. It knows nothing about earnings, news or fundamentals.
 - Patterns describe tendencies, not certainties. This is not financial advice.
 
 ## Development
 
 - `analysis.js`: the analysis engine, as pure functions
+- `symbols.js`: translates typed and TradingView symbols to Yahoo symbols
 - `feed.js`: turns Yahoo's response into daily bars
 - `main.js`: the window and data fetching (Electron main process)
 - `overlay.html`: the UI

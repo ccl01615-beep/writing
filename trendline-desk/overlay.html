@@ -119,6 +119,11 @@ details.panel summary{cursor:pointer;list-style:none}
 details.panel summary::-webkit-details-marker{display:none}
 details.panel summary h3::after{content:"＋";font-weight:400}
 details.panel[open] summary h3::after{content:"－"}
+.tvrow{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap;font-size:12px}
+.tvrow label{display:inline-flex;align-items:center;gap:5px;font-weight:500;cursor:pointer;white-space:nowrap}
+.tvrow input{margin:0;accent-color:var(--accent)}
+#tvStatus{color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.msg .link{border:0;background:none;padding:0;color:var(--accent);font-weight:500;text-decoration:underline}
 .disclaim{font-size:10.5px;color:var(--muted);margin:0}
 
 body.compact .full{display:none!important}
@@ -143,6 +148,10 @@ body.compact .scroll{gap:8px;padding-top:8px}
     <input id="sym" type="text" placeholder="Ticker, e.g. AAPL" maxlength="14" autocomplete="off" spellcheck="false" aria-label="Ticker symbol">
     <button class="btn primary" type="submit">Load</button>
   </form>
+  <div class="tvrow" id="tvRow" hidden>
+    <label for="tvFollow"><input type="checkbox" id="tvFollow"> Follow TradingView</label>
+    <span id="tvStatus"></span>
+  </div>
   <div class="chips full" id="chips" aria-label="Watchlist"></div>
 
   <div id="msg"></div>
@@ -193,10 +202,13 @@ body.compact .scroll{gap:8px;padding-top:8px}
 </div>
 
 <script src="analysis.js"></script>
+<script src="symbols.js"></script>
 <script>
 (() => {
 "use strict";
 const T = window.TrendAnalysis, { f$, pct, esc, fDate, MONTHS } = T, last = a => a[a.length - 1];
+const SYM = window.TrendSymbols;
+const yearOf = d => (d && d.meta.crypto ? 365 : 252);
 const $ = s => document.querySelector(s);
 // window.trendline is provided by preload.js inside the app. The fallback keeps the page usable for tests.
 const api = window.trendline || {
@@ -230,12 +242,14 @@ async function initWindow() {
 function setCompactUI(on) { document.body.classList.toggle("compact", on); $("#compactBtn").setAttribute("aria-pressed", String(on)); if (!on) requestAnimationFrame(draw); }
 
 /* ---------- loading ---------- */
-async function load(sym, { quiet = false } = {}) {
-  sym = String(sym || "").trim().toUpperCase();
-  if (!sym) return;
+// raw: the symbol is already in Yahoo form (watchlist, refresh). Otherwise translate what was typed or seen in TradingView.
+async function load(input, { quiet = false, raw = false, preferStock = false, from = "" } = {}) {
+  const resolved = raw ? { symbol: String(input || "").trim().toUpperCase() } : SYM.resolveSymbol(input, { preferStock });
+  if (!resolved || !resolved.symbol) return;
+  const sym = resolved.symbol;
   const id = ++reqId;
   loading = true;
-  if (!quiet) showMsg("info", `Loading ${sym}…`);
+  if (!quiet) showMsg("info", from ? `Loading ${sym} from TradingView…` : `Loading ${sym}…`);
   const res = await api.history(sym);
   if (id !== reqId) return;  // a newer request superseded this one
   loading = false;
@@ -244,12 +258,16 @@ async function load(sym, { quiet = false } = {}) {
     showMsg("err", res.error);
     return;
   }
-  showMsg();
+  if (resolved.alsoStock) {
+    showMsg("info", `Showing the ${resolved.base} coin (${sym}). `);
+    const b = document.createElement("button"); b.className = "link"; b.type = "button"; b.textContent = `Load the stock ${resolved.alsoStock} instead`;
+    b.onclick = () => load(resolved.alsoStock, { preferStock: true }); $("#msg .msg").append(b);
+  } else showMsg();
   const sym2 = res.meta.symbol || sym;
   if (!prefs.watch.includes(sym2)) prefs.watch = [sym2, ...prefs.watch].slice(0, 12);
   prefs.sel = sym2; save();
   data = res;
-  A = T.analyze(res.rows, prefs.H);
+  A = T.analyze(res.rows, prefs.H, { periodsPerYear: yearOf(res) });
   const r = res.rows; moves[sym2] = r[r.length - 1].c / r[r.length - 2].c - 1;
   render();
   schedule();
@@ -257,9 +275,9 @@ async function load(sym, { quiet = false } = {}) {
 function schedule() {
   clearTimeout(timer);
   const open = data && data.meta.session && data.meta.session !== "Market closed";
-  timer = setTimeout(() => { if (data) load(data.meta.symbol, { quiet: true }); }, open ? REFRESH_OPEN_MS : REFRESH_CLOSED_MS);
+  timer = setTimeout(() => { if (data) load(data.meta.symbol, { quiet: true, raw: true }); }, open ? REFRESH_OPEN_MS : REFRESH_CLOSED_MS);
 }
-window.addEventListener("focus", () => { if (data && Date.now() - data.fetchedAt > 30000) load(data.meta.symbol, { quiet: true }); });
+window.addEventListener("focus", () => { if (data && Date.now() - data.fetchedAt > 30000) load(data.meta.symbol, { quiet: true, raw: true }); });
 function showMsg(kind, text) { const m = $("#msg"); m.innerHTML = text ? `<div class="msg ${kind === "info" ? "info" : ""}">${esc(text)}</div>` : ""; }
 function setLiveDot(on, label) { const el = $("#liveDot"); if (el) { el.classList.toggle("on", on); el.lastChild.textContent = " " + label; } }
 
@@ -272,7 +290,7 @@ function renderChips() {
     const c = document.createElement("span"); c.className = "chip"; c.setAttribute("aria-current", String(data && s === data.meta.symbol));
     const b = document.createElement("button"); const mv = moves[s];
     b.innerHTML = esc(s) + (mv != null ? ` <span class="mv ${mv >= 0 ? "up" : "down"}">${pct(mv)}</span>` : "");
-    b.onclick = () => load(s);
+    b.onclick = () => load(s, { raw: true });
     const x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove " + s);
     x.onclick = () => { prefs.watch = prefs.watch.filter(w => w !== s); save(); renderChips(); };
     c.append(b, x); el.append(c);
@@ -282,7 +300,7 @@ function seg(el, opts, val, on) { el.innerHTML = ""; for (const [v, l] of opts) 
 const OVS = [["sma20", "20d", "--sma20"], ["sma50", "50d", "--sma50"], ["sma200", "200d", "--sma200"], ["bb", "Bands", "--band"], ["chan", "Channel", "--accent"], ["lv", "Levels", "--muted"], ["proj", "Cone", "--cone"]];
 function renderControls() {
   seg($("#rangeSeg"), [["3M", "3M"], ["6M", "6M"], ["1Y", "1Y"], ["2Y", "2Y"]], prefs.range, v => { prefs.range = v; save(); renderControls(); draw(); });
-  seg($("#horizonSeg"), [[10, "2w"], [20, "1m"], [60, "3m"]], prefs.H, v => { prefs.H = v; save(); A = T.analyze(data.rows, v); render(); });
+  seg($("#horizonSeg"), [[10, "2w"], [20, "1m"], [60, "3m"]], prefs.H, v => { prefs.H = v; save(); A = T.analyze(data.rows, v, { periodsPerYear: yearOf(data) }); render(); });
   const lo = [["rsi", "RSI"], ["macd", "MACD"]]; if (A.hasVol) lo.push(["vol", "Vol"]); if (prefs.lower === "vol" && !A.hasVol) prefs.lower = "rsi";
   seg($("#lowerSeg"), lo, prefs.lower, v => { prefs.lower = v; save(); renderControls(); draw(); });
   const ov = $("#overlays"); ov.innerHTML = "";
@@ -330,7 +348,7 @@ function drawNow() {
   if (!W || !Ht) return;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Ht * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(Ht * dpr); }
   const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Ht);
-  const bars = { "3M": 63, "6M": 126, "1Y": 252, "2Y": 504 }[prefs.range] || 126, start = Math.max(0, n - bars), proj = ov.proj ? A.H : 0, slots = n - start + proj;
+  const bars = Math.round(({ "3M": .25, "6M": .5, "1Y": 1, "2Y": 2 }[prefs.range] || .5) * yearOf(data)), start = Math.max(0, n - bars), proj = ov.proj ? A.H : 0, slots = n - start + proj;
   const padL = 2, padR = 54, padT = 6, axisH = 16, gap = 8, lowerH = Math.max(46, Math.round(Ht * .2)), priceH = Ht - padT - lowerH - gap - axisH, plotW = W - padL - padR, sw = plotW / slots;
   const X = i => padL + (i - start + .5) * sw;
   let lo = Infinity, hi = -Infinity; const inc = v => { if (isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); } };
@@ -381,6 +399,28 @@ new ResizeObserver(() => draw()).observe(box);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 if (document.fonts) document.fonts.ready.then(draw);
 
+/* ---------- follow TradingView ---------- */
+let tvLastSym = null;
+function initTradingView() {
+  if (!api.watchTradingView) return;
+  const box = $("#tvFollow"), status = $("#tvStatus");
+  const show = st => {
+    $("#tvRow").hidden = !st.available;
+    if (!st.available) return;
+    if (!box.checked) { status.textContent = "Off. Type tickers yourself."; return; }
+    if (!st.running) { status.textContent = "Waiting for TradingView Desktop to open."; tvLastSym = null; return; }
+    const raw = SYM.symbolFromTitle(st.title);
+    if (!raw) { status.textContent = `TradingView is open, but its title doesn't start with a symbol: "${st.title.slice(0, 60)}"`; return; }
+    const r = SYM.resolveSymbol(raw);
+    status.textContent = r && r.symbol !== raw ? `On ${raw} → ${r.symbol}` : `On ${raw}`;
+    if (raw !== tvLastSym) { tvLastSym = raw; load(raw, { from: "tv" }); }
+  };
+  api.onTradingView(show);
+  box.checked = prefs.followTv !== false;
+  box.onchange = async () => { prefs.followTv = box.checked; save(); tvLastSym = null; show(await api.watchTradingView(box.checked)); };
+  api.watchTradingView(box.checked).then(show);
+}
+
 /* ---------- boot ---------- */
 (async () => {
   const saved = await api.getPrefs();
@@ -388,7 +428,8 @@ if (document.fonts) document.fonts.ready.then(draw);
   await initWindow();
   renderChips();
   $("#sym").focus();
-  if (prefs.sel) load(prefs.sel);
+  initTradingView();
+  if (prefs.sel) load(prefs.sel, { raw: true });
   // Fill in watchlist day-change badges in the background.
   for (const s of prefs.watch) if (s !== prefs.sel) api.history(s).then(r => { if (r.ok) { const rr = r.rows; moves[s] = rr[rr.length - 1].c / rr[rr.length - 2].c - 1; renderChips(); } });
 })();

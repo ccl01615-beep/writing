@@ -1,12 +1,12 @@
 {
   "name": "trendline-desk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An always-on-top window that reads a stock's live price and history and flags trends, patterns and likely next moves.",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/analysis.test.js test/feed.test.js",
+    "test": "node --test test/analysis.test.js test/feed.test.js test/symbols.test.js",
     "dist": "electron-builder --win nsis portable"
   },
   "devDependencies": {
@@ -26,6 +26,7 @@
       "preload.js",
       "feed.js",
       "analysis.js",
+      "symbols.js",
       "overlay.html",
       "package.json"
     ],

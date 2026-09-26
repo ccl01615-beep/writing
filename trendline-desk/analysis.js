@@ -12,7 +12,8 @@ function quantile(sorted,q){if(!sorted.length)return NaN;const p=(sorted.length-
 const last=a=>a[a.length-1];
 
 /* ---------- analysis ---------- */
-function analyze(rows,H){
+function analyze(rows,H,opts){
+  const YR=(opts&&opts.periodsPerYear)||252;  // trading days a year: 252 for stocks, 365 for crypto
   const n=rows.length,c=rows.map(r=>r.c),hi=rows.map(r=>r.h),lo=rows.map(r=>r.l),vol=rows.map(r=>r.v);
   const px=c[n-1];
   const s20=sma(c,20),s50=sma(c,50),s200=sma(c,200);
@@ -22,7 +23,7 @@ function analyze(rows,H){
   const tr=rows.map((r,i)=>i?Math.max(r.h-r.l,Math.abs(r.h-c[i-1]),Math.abs(r.l-c[i-1])):r.h-r.l);
   const atr=last(sma(tr,Math.min(14,n)));const atrPct=atr/px;
   const lr=[];for(let i=1;i<n;i++)lr.push(Math.log(c[i]/c[i-1]));
-  const sdD=stdev(lr.slice(-Math.min(60,lr.length))),annVol=sdD*Math.sqrt(252);
+  const sdD=stdev(lr.slice(-Math.min(60,lr.length))),annVol=sdD*Math.sqrt(YR);
   const hasVol=vol.some(v=>v>0);
 
   // trend regression on log price
@@ -31,7 +32,7 @@ function analyze(rows,H){
   const slope=(L*sxy-sx*sy)/(L*sxx-sx*sx),icpt=(sy-slope*sx)/L;
   let ssr=0,sst=0;const my=sy/L;
   for(let i=0;i<L;i++){const y=Math.log(c[x0+i]),f=icpt+slope*i;ssr+=(y-f)**2;sst+=(y-my)**2}
-  const r2=sst?1-ssr/sst:0,resSd=Math.sqrt(ssr/Math.max(1,L-2)),annTrend=Math.exp(slope*252)-1;
+  const r2=sst?1-ssr/sst:0,resSd=Math.sqrt(ssr/Math.max(1,L-2)),annTrend=Math.exp(slope*YR)-1;
   const reg={x0,L,slope,icpt,r2,resSd,annTrend};
 
   // projection cone from the latest close
@@ -42,13 +43,13 @@ function analyze(rows,H){
   for(let i=k;i<n-k;i++){let isH=true,isL=true;for(let j=i-k;j<=i+k;j++){if(hi[j]>hi[i])isH=false;if(lo[j]<lo[i])isL=false}if(isH)swH.push(i);if(isL)swL.push(i)}
 
   // support / resistance clusters
-  const from=Math.max(0,n-260),piv=[...swH.filter(i=>i>=from).map(i=>({p:hi[i],i})),...swL.filter(i=>i>=from).map(i=>({p:lo[i],i}))].sort((a,b)=>a.p-b.p);
+  const from=Math.max(0,n-Math.round(YR*1.03)),piv=[...swH.filter(i=>i>=from).map(i=>({p:hi[i],i})),...swL.filter(i=>i>=from).map(i=>({p:lo[i],i}))].sort((a,b)=>a.p-b.p);
   const tol=Math.max(.012,atrPct*.8),clusters=[];
   for(const p of piv){const cl=last(clusters);if(cl&&p.p<=cl.ref*(1+tol)){cl.items.push(p)}else clusters.push({ref:p.p,items:[p]})}
   const levels=clusters.map(cl=>({p:cl.items.reduce((a,b)=>a+b.p,0)/cl.items.length,touches:cl.items.length,lastI:Math.max(...cl.items.map(q=>q.i))}));
   const above=levels.filter(l=>l.p>px*1.004).sort((a,b)=>a.p-b.p).slice(0,2);
   const below=levels.filter(l=>l.p<px*.996).sort((a,b)=>b.p-a.p).slice(0,2);
-  const y1=c.slice(-252),hi52=Math.max(...hi.slice(-252)),lo52=Math.min(...lo.slice(-252));
+  const hi52=Math.max(...hi.slice(-YR)),lo52=Math.min(...lo.slice(-YR));
   const hi20=Math.max(...hi.slice(-21,-1)),lo20=Math.min(...lo.slice(-21,-1));
 
   // swing structure
@@ -88,7 +89,7 @@ function analyze(rows,H){
   else add(r>=50?"bull":"bear",`Momentum ${r>=50?"positive":"negative"} (RSI ${r.toFixed(0)})`,r>=50?"RSI is above 50, which is where it sits during most advances.":"RSI is below 50, which is where it sits during most declines.",r>=50?.5:-.5);
   let mx=null;for(let i=n-1;i>=n-6&&i>0;i--){if(hist[i]>0&&hist[i-1]<=0){mx={t:"bull",i};break}if(hist[i]<0&&hist[i-1]>=0){mx={t:"bear",i};break}}
   if(mx)add(mx.t,mx.t==="bull"?"MACD turned up":"MACD turned down",`The MACD line crossed ${mx.t==="bull"?"above":"below"} its signal line ${n-1-mx.i===0?"today":(n-1-mx.i)+" sessions ago"}.`,mx.t==="bull"?.75:-.75);
-  const wHist=bbW.slice(-Math.min(250,n)).filter(x=>!isNaN(x)).sort((a,b)=>a-b),wNow=last(bbW),wPct=wHist.length?wHist.filter(x=>x<=wNow).length/wHist.length:NaN;
+  const wHist=bbW.slice(-Math.min(YR,n)).filter(x=>!isNaN(x)).sort((a,b)=>a-b),wNow=last(bbW),wPct=wHist.length?wHist.filter(x=>x<=wNow).length/wHist.length:NaN;
   if(wPct<=.15)add("watch","Volatility squeeze",`Bollinger Band width is in its lowest ${Math.max(1,Math.round(wPct*100))}% of the past year. Quiet stretches like this often come before a larger move. The squeeze itself doesn't say which direction.`,0);
   const vAvg=hasVol?sma(vol,20)[n-2]:NaN,vRel=hasVol?vol[n-1]/vAvg:NaN,vTxt=hasVol&&isFinite(vRel)?` on ${vRel.toFixed(1)}× average volume${vRel>=1.5?", which adds conviction":vRel<1?", which is light":""}`:"";
   if(px>hi20)add("bull","20-day breakout",`Closed at ${f$(px)}, above the prior 20-session high of ${f$(hi20)}${vTxt}.`,1);
@@ -131,7 +132,7 @@ function scenarios(A){
 }
 
 /* ---------- formatting ---------- */
-function f$(v){if(!isFinite(v))return "—";const d=v>=1000?0:v>=1?2:4;return "$"+v.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})}
+function f$(v){if(!isFinite(v))return "—";if(Math.abs(v)<1&&v!==0)return "$"+v.toFixed(Math.min(12,Math.max(2,3-Math.floor(Math.log10(Math.abs(v))))));const d=v>=1000?0:2;return "$"+v.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})}
 function pct(v,d=1){if(!isFinite(v))return "—";return (v>0?"+":v<0?"−":"")+Math.abs(v*100).toFixed(d)+"%"}
 function esc(s){return String(s).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]))}
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];

@@ -53,7 +53,8 @@ function parseChart(json) {
       exchange: meta.fullExchangeName || meta.exchangeName || "",
       price: live || rows[rows.length - 1].c,
       time: meta.regularMarketTime ? meta.regularMarketTime * 1000 : Date.now(),
-      session: marketSession(meta),
+      crypto: meta.instrumentType === "CRYPTOCURRENCY",
+      session: meta.instrumentType === "CRYPTOCURRENCY" ? "Trades 24/7" : marketSession(meta),
     },
   };
 }

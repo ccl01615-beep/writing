@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, net, screen, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { spawn } = require("child_process");
 const { parseChart } = require("./feed");
 
 const TOGGLE_SHORTCUT = "CommandOrControl+Shift+Y";
@@ -98,7 +99,7 @@ async function fetchHistory(symbol) {
       });
       const json = await res.json().catch(() => null);
       if (res.status === 404 || (json && json.chart && json.chart.error && json.chart.error.code === "Not Found")) {
-        return { ok: false, error: `"${sym}" wasn't found. Check the symbol. Non-US listings use a suffix, e.g. SHOP.TO or VOD.L.` };
+        return { ok: false, error: `"${sym}" wasn't found. Check the symbol. Non-US listings use a suffix (SHOP.TO, VOD.L). Crypto uses a pair (BTC-USD).` };
       }
       if (!res.ok) { lastErr = new Error(`The price feed answered ${res.status}.`); continue; }
       return { ok: true, ...parseChart(json) };
@@ -109,6 +110,46 @@ async function fetchHistory(symbol) {
   return { ok: false, error: (lastErr && lastErr.message) || "Couldn't reach the price feed. Check your internet connection." };
 }
 
+/* ---------- follow TradingView Desktop ----------
+   TradingView puts the chart's symbol at the start of its window title, e.g. "AAPL 227.52 ▲ +1.2% Unnamed".
+   One PowerShell loop reports that title whenever it changes. Nothing is captured from the screen. */
+const TV_SCRIPT = [
+  "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
+  "$ErrorActionPreference = 'SilentlyContinue'",
+  "$last = $null",
+  "while ($true) {",
+  "  $p = Get-Process -Name '*TradingView*' | Where-Object { $_.MainWindowTitle } | Select-Object -First 1",
+  "  $t = if ($p) { 'T:' + $p.MainWindowTitle } else { 'N:' }",
+  "  if ($t -ne $last) { [Console]::Out.WriteLine($t); [Console]::Out.Flush(); $last = $t }",
+  "  Start-Sleep -Milliseconds 1000",
+  "}",
+].join("\n");
+let tvProc = null;
+let tvState = { available: process.platform === "win32", running: false, title: "" };
+
+function sendTv() { if (win) win.webContents.send("tv:title", tvState); }
+function startTvWatch() {
+  if (process.platform !== "win32" || tvProc) return;
+  try {
+    tvProc = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", TV_SCRIPT], { windowsHide: true });
+  } catch { tvProc = null; tvState = { available: false, running: false, title: "" }; sendTv(); return; }
+  let buf = "";
+  tvProc.stdout.setEncoding("utf8");
+  tvProc.stdout.on("data", (d) => {
+    buf += d;
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).replace(/\r$/, "");
+      buf = buf.slice(i + 1);
+      tvState = line.startsWith("T:") ? { available: true, running: true, title: line.slice(2) } : { available: true, running: false, title: "" };
+      sendTv();
+    }
+  });
+  tvProc.on("error", () => { tvProc = null; tvState = { available: false, running: false, title: "" }; sendTv(); });
+  tvProc.on("exit", () => { tvProc = null; });
+}
+function stopTvWatch() { if (tvProc) { tvProc.kill(); tvProc = null; } }
+
 /* ---------- IPC ---------- */
 ipcMain.handle("history", (_e, symbol) => fetchHistory(symbol));
 ipcMain.handle("prefs:get", () => prefs.ui || {});
@@ -117,6 +158,7 @@ ipcMain.handle("win:state", () => ({ onTop: prefs.onTop !== false, opacity: pref
 ipcMain.handle("win:onTop", (_e, on) => { prefs.onTop = !!on; savePrefs(); if (win) win.setAlwaysOnTop(!!on, "floating"); });
 ipcMain.handle("win:opacity", (_e, v) => { const o = Math.min(1, Math.max(0.35, +v || 1)); prefs.opacity = o; savePrefs(); if (win) win.setOpacity(o); });
 ipcMain.handle("win:compact", (_e, on) => { prefs.compact = !!on; savePrefs(); applyCompact(!!on); });
+ipcMain.handle("tv:watch", (_e, on) => { if (on) startTvWatch(); else stopTvWatch(); return tvState; });
 ipcMain.handle("win:minimize", () => win && win.minimize());
 ipcMain.handle("win:close", () => win && win.close());
 
@@ -130,5 +172,5 @@ app.whenReady().then(() => {
   } catch { /* shortcut taken by another app; the window still works */ }
   app.on("activate", () => { if (!win) createWindow(); });
 });
-app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("will-quit", () => { globalShortcut.unregisterAll(); stopTvWatch(); });
 app.on("window-all-closed", () => app.quit());
